@@ -25,4 +25,4 @@ tests/test_api.py::test_summary_missing_date_rejected PASSED             [100%]
     from starlette.testclient import TestClient as TestClient  # noqa
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 13 passed, 1 warning in 1.52s ========================
+======================== 13 passed, 1 warning in 1.50s ========================
