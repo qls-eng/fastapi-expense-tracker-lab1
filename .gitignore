@@ -1,0 +1,16 @@
+# Python 虚拟环境
+.venv/
+venv/
+
+# 字节码与测试缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE 个人配置
+.vscode/
+.idea/
+
+# 运行时输出（本项目为内存存储，不产生数据文件；保留目录占位说明）
+data/
+output/

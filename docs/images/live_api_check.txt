@@ -1,0 +1,7 @@
+POST income: {"id":1,"amount":5000.0,"type":"income","category":"salary","date":"2026-11-01"}
+POST expense1: {"id":2,"amount":35.5,"type":"expense","category":"food","date":"2026-11-01"}
+POST expense2: {"id":3,"amount":20.0,"type":"expense","category":"transport","date":"2026-11-02"}
+GET expense total=2
+SUMMARY: {"start_date":"2026-11-01","end_date":"2026-11-02","total_income":5000.0,"total_expense":55.5,"balance":4944.5}
+negative amount status=422
+invalid query type status=422
