@@ -3,22 +3,48 @@
 考题二：FastAPI 记账接口主程序。
 
 接口一览：
-- POST   /records   新增一条流水（金额 > 0、类型合法、分类非空、日期格式合法）
-- GET    /records  按类型 / 分类 / 日期区间筛选，分页返回
-- GET    /summary  指定日期区间内收入合计、支出合计、结余
+- POST   /records             新增一条流水（金额 > 0、类型合法、分类非空、日期格式合法）
+- GET    /records             按类型 / 分类 / 日期区间筛选，分页返回
+- GET    /records/export      按同样筛选条件导出 CSV（utf-8-sig）
+- GET    /summary             指定日期区间内收入合计、支出合计、结余
+- GET    /summary/by-category 按分类聚合，附各分类占同类型总额的百分比
 
 启动方式：在项目根目录执行  uvicorn src.main:app --host 127.0.0.1 --port 8000
 """
 
 from datetime import date
-from typing import Optional
+from io import StringIO
+from typing import Iterable, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from src.schemas import RecordIn, RecordOut, SummaryOut
+from src.schemas import CategorySummaryOut, RecordIn, RecordOut, SummaryOut
 from src.store import RecordStore
+
+import csv
+
+CSV_COLUMNS = ("id", "amount", "type", "category", "date")
+
+
+def _ensure_date_order(start_date: date, end_date: date) -> None:
+    """校验日期区间顺序，起止颠倒时返回结构化 422。"""
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=422,
+            detail=[{"field": "start_date", "message": "起始日期不能晚于结束日期"}],
+        )
+
+
+def _build_csv(records: Iterable[dict]) -> bytes:
+    """把流水列表渲染成 CSV 字节串（utf-8-sig，Excel 直接打开不乱码）。"""
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(CSV_COLUMNS)
+    for record in records:
+        writer.writerow([record[col] for col in CSV_COLUMNS])
+    return buffer.getvalue().encode("utf-8-sig")
 
 
 def create_app(store: Optional[RecordStore] = None) -> FastAPI:
@@ -83,7 +109,71 @@ def create_app(store: Optional[RecordStore] = None) -> FastAPI:
         end_date: date = Query(..., description="结束日期（含）YYYY-MM-DD"),
     ):
         """返回指定日期区间内的收入、支出与结余。"""
+        _ensure_date_order(start_date, end_date)
         return app.state.store.summarize(start_date, end_date)
+
+    @app.get("/summary/by-category", response_model=CategorySummaryOut)
+    def summary_by_category(
+        start_date: date = Query(..., description="起始日期（含）YYYY-MM-DD"),
+        end_date: date = Query(..., description="结束日期（含）YYYY-MM-DD"),
+        record_type: Optional[str] = Query(None, alias="type", description="income / expense，缺省统计全部"),
+    ):
+        """按分类聚合区间内的流水，并给出各分类占同类型总额的百分比。"""
+        _ensure_date_order(start_date, end_date)
+        if record_type is not None and record_type not in ("income", "expense"):
+            raise HTTPException(
+                status_code=422,
+                detail=[{"field": "type", "message": "类型只能为 income 或 expense"}],
+            )
+
+        totals = app.state.store.summarize(start_date, end_date)
+        items = app.state.store.summarize_by_category(start_date, end_date, record_type)
+
+        rendered = []
+        for item in items:
+            base = totals["total_income"] if item["type"] == "income" else totals["total_expense"]
+            percent = round(item["total"] / base * 100, 2) if base else 0.0
+            rendered.append({**item, "percent": percent})
+
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_income": totals["total_income"],
+            "total_expense": totals["total_expense"],
+            "items": rendered,
+        }
+
+    @app.get("/records/export")
+    def export_records(
+        record_type: Optional[str] = Query(None, alias="type", description="income / expense"),
+        category: Optional[str] = Query(None, description="分类精确匹配"),
+        start_date: Optional[date] = Query(None, description="起始日期（含）YYYY-MM-DD"),
+        end_date: Optional[date] = Query(None, description="结束日期（含）YYYY-MM-DD"),
+    ):
+        """按与 /records 相同的筛选条件导出 CSV 文件。"""
+        if record_type is not None and record_type not in ("income", "expense"):
+            raise HTTPException(
+                status_code=422,
+                detail=[{"field": "type", "message": "类型只能为 income 或 expense"}],
+            )
+        if start_date is not None and end_date is not None:
+            _ensure_date_order(start_date, end_date)
+
+        records = app.state.store.query(
+            record_type=record_type,
+            category=category,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        content = _build_csv(records)
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": 'attachment; filename="records.csv"',
+                "X-Total-Records": str(len(records)),
+            },
+        )
 
     @app.get("/")
     def health():

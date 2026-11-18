@@ -61,3 +61,47 @@ AI 给出测试用例骨架，按正常、边界异常、查询分页、汇总�
 1. pydantic 模型字段名与导入类型同名（`date: date`）会导致注解解析失败，需用类型别名。
 2. pydantic v2 不再支持在 `Field(...)` 上传 `strip_whitespace`，字符串清洗应使用 `field_validator`。
 3. 本机 Python 为 3.14.5，依赖安装在项目内 `.venv`，不污染全局环境。
+
+## 考题二 第5轮（R5）：实验后补做——按分类汇总与导出 CSV
+
+**背景说明：**
+这两个接口不在指导书要求之内。前三轮已完成"记一笔 / 查明细 / 看汇总"的最小闭环，第 4 轮 13 个用例全部通过。本轮是实验结束后（2026-11-18）认为"汇总只给总额看不出钱花在哪、明细只能看不能带走"，主动追补的两项功能。时间与性质如实记录，未修改前四轮任何内容。
+
+**我的提问：**
+```
+在现有记账接口上再加两件事：
+1) 按分类汇总：起止日期内，按 (type, category) 分组，给出每组总额、条数、占比；
+2) 导出 CSV：按和 /records 一样的筛选条件，把明细导出成 CSV，Excel 能直接打开。
+
+约束：不要动已有接口的对外行为；新接口要有测试；占比口径写清楚。
+```
+
+**AI 输出摘要：**
+- `store.py` 新增 `summarize_by_category()`：按 `(type, category)` 聚合，返回总额与条数；
+- `schemas.py` 新增 `CategoryStat`（type/category/total/count/percent）与 `CategorySummaryOut`（带 `total_income`/`total_expense` 作百分比分母）；
+- `main.py` 新增 `GET /summary/by-category` 与 `GET /records/export`，导出用 `csv.writer` + `\r\n` + `utf-8-sig`，响应头带 `X-Total-Records`；
+- 测试新增 9 个用例（含 BOM 校验、空结果仅表头、起止颠倒 422）。
+
+**人工修改 / 审查发现：**
+1. **排序不稳定**：AI 初版只按总额降序排，同额分类（如两条都 20 元）的顺序取决于字典内部迭代顺序，测试无法写强断言。人工定为"收入在前 → 同类型金额降序 → 同额分类字典序"，变成可预期的契约。
+2. **占比分母含糊**：初版对每个分类算占比时用的是"全部收支总额"，但 `type=expense` 筛选后各分类占比会加起来远不到 100%。人工改为分母取**同类型总额**，并在响应里回传 `total_income`/`total_expense` 让调用方可自校验。
+3. **`/summary` 缺起止颠倒校验**：上一轮复盘里写过"日期倒置未校验"这条改进项，本轮补上 `_ensure_date_order()`，起止颠倒统一返回结构化 422。
+4. **CSV 编码**：初版用 `utf-8`，Excel 双击打开中文乱码。改为 `utf-8-sig`（带 BOM），并加用例断言首字节为 `b'\xef\xbb\xbf'`。
+5. **空导出**：初版空结果直接返回空 body，前端解析会报错。改为空结果也输出表头行。
+
+**运行结果：**
+`pytest tests/ -v` → **22 passed, 1 warning in 5.08s**（原 13 个 + 新增 9 个）；输出已覆盖写入 `docs/images/pytest_output.txt`。
+
+真实调用核对（5 条种子数据）：
+
+```text
+summary: total_income=7000.0  total_expense=135.5  balance=6864.5
+by-category: 工资 5000.0/1条/71.43%  兼职 2000.0/1条/28.57%  餐饮 115.5/2条/85.24%  交通 20.0/1条/14.76%
+export: content-type=text/csv; charset=utf-8  X-Total-Records=5  attachment; filename="records.csv"
+        BOM=b'\xef\xbb\xbf'  行数=6（表头+5）  首行=1,5000.0,income,工资,2026-11-01
+export?type=expense: X-Total-Records=3
+/summary 起止颠倒: 422
+```
+
+**本轮判定：**
+两接口完成且与手算一致；占比口径（同类型总额）已在报告与 README 写明，避免"四条加起来 100.01"这类误读。

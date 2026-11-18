@@ -52,3 +52,23 @@ class SummaryOut(BaseModel):
     total_income: float = Field(description="区间内收入合计")
     total_expense: float = Field(description="区间内支出合计")
     balance: float = Field(description="结余 = 收入合计 - 支出合计")
+
+
+class CategoryStat(BaseModel):
+    """单个分类的聚合结果。"""
+
+    type: Literal["income", "expense"] = Field(description="所属类型")
+    category: str = Field(description="分类名")
+    total: float = Field(description="该分类区间内金额合计")
+    count: int = Field(description="该分类区间内条数")
+    percent: float = Field(description="占同类型总额的百分比，保留两位小数")
+
+
+class CategorySummaryOut(BaseModel):
+    """按分类汇总的响应模型。"""
+
+    start_date: DateType
+    end_date: DateType
+    total_income: float = Field(description="区间内收入合计，作百分比分母")
+    total_expense: float = Field(description="区间内支出合计，作百分比分母")
+    items: list[CategoryStat] = Field(description="各分类聚合明细，收入在前、同类按金额降序")

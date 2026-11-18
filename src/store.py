@@ -65,6 +65,45 @@ class RecordStore:
             result.append(record)
         return result
 
+    def summarize_by_category(
+        self,
+        start_date: date,
+        end_date: date,
+        record_type: Optional[str] = None,
+    ) -> list[dict]:
+        """按「类型 + 分类」聚合指定日期区间内的流水。
+
+        返回列表元素字段：type、category、total（金额合计）、count（条数）。
+        排序规则：先按类型（income 在前），同类型内按金额降序，
+        金额相同再按分类名字典序，保证结果稳定可复现。
+        """
+        with self._lock:
+            snapshot = [dict(r) for r in self._records]
+
+        buckets: dict[tuple[str, str], dict] = {}
+        for record in snapshot:
+            if record["date"] < start_date or record["date"] > end_date:
+                continue
+            if record_type is not None and record["type"] != record_type:
+                continue
+
+            key = (record["type"], record["category"])
+            bucket = buckets.get(key)
+            if bucket is None:
+                bucket = {"type": record["type"], "category": record["category"],
+                          "total": 0.0, "count": 0}
+                buckets[key] = bucket
+            bucket["total"] += record["amount"]
+            bucket["count"] += 1
+
+        items = list(buckets.values())
+        for item in items:
+            item["total"] = round(item["total"], 2)
+
+        type_rank = {"income": 0, "expense": 1}
+        items.sort(key=lambda x: (type_rank.get(x["type"], 9), -x["total"], x["category"]))
+        return items
+
     def summarize(self, start_date: date, end_date: date) -> dict:
         """统计指定日期区间（含两端）内的收入合计、支出合计与结余。"""
         with self._lock:

@@ -3,21 +3,30 @@ platform win32 -- Python 3.14.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Lenovo\D
 cachedir: .pytest_cache
 rootdir: C:\Users\Lenovo\Doubao\chats\2026-10-15\new-chat\github-workspace\fastapi-expense-tracker-lab1
 plugins: anyio-4.15.1
-collecting ... collected 13 items
+collecting ... collected 22 items
 
-tests/test_api.py::test_add_records_success PASSED                       [  7%]
-tests/test_api.py::test_amount_must_be_positive PASSED                   [ 15%]
-tests/test_api.py::test_invalid_type_rejected PASSED                     [ 23%]
-tests/test_api.py::test_invalid_date_format_rejected PASSED              [ 30%]
-tests/test_api.py::test_empty_category_rejected PASSED                   [ 38%]
-tests/test_api.py::test_list_filter_by_type_and_category PASSED          [ 46%]
-tests/test_api.py::test_list_filter_by_date_range PASSED                 [ 53%]
-tests/test_api.py::test_list_pagination PASSED                           [ 61%]
-tests/test_api.py::test_invalid_pagination_rejected PASSED               [ 69%]
-tests/test_api.py::test_invalid_query_type_rejected PASSED               [ 76%]
-tests/test_api.py::test_summary_calculation PASSED                       [ 84%]
-tests/test_api.py::test_summary_empty_range_returns_zero PASSED          [ 92%]
-tests/test_api.py::test_summary_missing_date_rejected PASSED             [100%]
+tests/test_api.py::test_add_records_success PASSED                       [  4%]
+tests/test_api.py::test_amount_must_be_positive PASSED                   [  9%]
+tests/test_api.py::test_invalid_type_rejected PASSED                     [ 13%]
+tests/test_api.py::test_invalid_date_format_rejected PASSED              [ 18%]
+tests/test_api.py::test_empty_category_rejected PASSED                   [ 22%]
+tests/test_api.py::test_list_filter_by_type_and_category PASSED          [ 27%]
+tests/test_api.py::test_list_filter_by_date_range PASSED                 [ 31%]
+tests/test_api.py::test_list_pagination PASSED                           [ 36%]
+tests/test_api.py::test_invalid_pagination_rejected PASSED               [ 40%]
+tests/test_api.py::test_invalid_query_type_rejected PASSED               [ 45%]
+tests/test_api.py::test_summary_calculation PASSED                       [ 50%]
+tests/test_api.py::test_summary_empty_range_returns_zero PASSED          [ 54%]
+tests/test_api.py::test_summary_missing_date_rejected PASSED             [ 59%]
+tests/test_api.py::test_summary_reversed_range_rejected PASSED           [ 63%]
+tests/test_api.py::test_summary_by_category_groups_and_percents PASSED   [ 68%]
+tests/test_api.py::test_summary_by_category_type_filter PASSED           [ 72%]
+tests/test_api.py::test_summary_by_category_empty_range PASSED           [ 77%]
+tests/test_api.py::test_summary_by_category_invalid_type_rejected PASSED [ 81%]
+tests/test_api.py::test_export_csv_all_records PASSED                    [ 86%]
+tests/test_api.py::test_export_csv_respects_filters PASSED               [ 90%]
+tests/test_api.py::test_export_csv_empty_result_has_header_only PASSED   [ 95%]
+tests/test_api.py::test_export_csv_invalid_params_rejected PASSED        [100%]
 
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\fastapi\testclient.py:1
@@ -25,4 +34,4 @@ tests/test_api.py::test_summary_missing_date_rejected PASSED             [100%]
     from starlette.testclient import TestClient as TestClient  # noqa
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 13 passed, 1 warning in 2.38s ========================
+======================== 22 passed, 1 warning in 5.08s ========================

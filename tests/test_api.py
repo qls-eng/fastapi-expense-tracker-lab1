@@ -6,7 +6,9 @@
 - 正常新增流水、字段回显与 id 自增
 - 边界 / 异常：金额非正、类型非法、日期格式错误、分类为空、列表查询类型非法、分页非法
 - 查询筛选（类型、分类、日期区间）与分页
-- 区间汇总：收入合计、支出合计、结余；空区间返回 0；缺少日期参数 4xx
+- 区间汇总：收入合计、支出合计、结余；空区间返回 0；缺少日期参数 4xx；起止颠倒 422
+- 按分类汇总：分组聚合、条数、百分比（以同类型总额为分母）、类型筛选、空区间
+- 导出 CSV：BOM、表头列顺序、行数、筛选生效、空结果仅表头、非法参数 422
 """
 
 import os
@@ -238,3 +240,152 @@ def test_summary_missing_date_rejected():
     client = make_client()
     resp = client.get("/summary", params={"start_date": "2026-11-01"})
     assert resp.status_code == 422, "缺少 end_date 应返回 422"
+
+
+def test_summary_reversed_range_rejected():
+    """起始日期晚于结束日期时返回结构化 422，而非静默算出错误结果。"""
+    client = make_client()
+    resp = client.get("/summary", params={
+        "start_date": "2026-11-05", "end_date": "2026-11-01"
+    })
+    assert resp.status_code == 422, "起止颠倒应返回 422"
+    assert resp.json()["detail"][0]["field"] == "start_date"
+
+
+# ================= 按分类汇总 =================
+
+def test_summary_by_category_groups_and_percents():
+    """
+    按分类汇总：同分类多条合并计条数与金额，百分比以同类型总额为分母。
+
+    人工核算（seed_two_days，区间 2026-11-01~2026-11-02）：
+      收入：工资 5000（1 条）、兼职 2000（1 条），合计 7000
+            → 工资 71.43%、兼职 28.57%
+      支出：餐饮 35.5 + 80 = 115.5（2 条）、交通 20（1 条），合计 135.5
+            → 餐饮 85.24%、交通 14.76%
+    """
+    client = make_client()
+    seed_two_days(client)
+
+    body = client.get("/summary/by-category", params={
+        "start_date": "2026-11-01", "end_date": "2026-11-02"
+    }).json()
+
+    assert body["total_income"] == 7000.0
+    assert body["total_expense"] == 135.5
+    assert len(body["items"]) == 4, "共 4 个（类型, 分类）组合"
+
+    # 排序：收入在前，同类型内金额降序 → 工资、兼职、餐饮、交通
+    assert [item["category"] for item in body["items"]] == ["工资", "兼职", "餐饮", "交通"]
+
+    salary, part_time, food, transport = body["items"]
+    assert (salary["type"], salary["total"], salary["count"]) == ("income", 5000.0, 1)
+    assert salary["percent"] == 71.43
+    assert part_time["percent"] == 28.57
+    assert (food["type"], food["total"], food["count"]) == ("expense", 115.5, 2)
+    assert food["percent"] == 85.24
+    assert transport["percent"] == 14.76
+
+
+def test_summary_by_category_type_filter():
+    """传 type=expense 时只返回支出分类，金额与条数不变。"""
+    client = make_client()
+    seed_two_days(client)
+
+    body = client.get("/summary/by-category", params={
+        "start_date": "2026-11-01", "end_date": "2026-11-02", "type": "expense"
+    }).json()
+
+    assert [item["category"] for item in body["items"]] == ["餐饮", "交通"]
+    assert all(item["type"] == "expense" for item in body["items"])
+    # 分母仍是该区间全部支出合计，便于与 /summary 对照
+    assert body["total_expense"] == 135.5
+
+
+def test_summary_by_category_empty_range():
+    """区间内无流水时 items 为空列表，合计为 0，不报错。"""
+    client = make_client()
+    seed_two_days(client)
+    body = client.get("/summary/by-category", params={
+        "start_date": "2026-12-01", "end_date": "2026-12-31"
+    }).json()
+    assert body["items"] == []
+    assert body["total_income"] == 0 and body["total_expense"] == 0
+
+
+def test_summary_by_category_invalid_type_rejected():
+    """非法 type 取值返回形态与 /records 一致的 422。"""
+    client = make_client()
+    resp = client.get("/summary/by-category", params={
+        "start_date": "2026-11-01", "end_date": "2026-11-02", "type": "loan"
+    })
+    assert resp.status_code == 422
+    assert resp.json()["detail"][0]["field"] == "type"
+
+
+# ================= 导出 CSV =================
+
+def test_export_csv_all_records():
+    """
+    导出 CSV：状态码 200、Content-Type 为 text/csv、带附件文件名、
+    内容含 BOM、列顺序与行数正确。
+    """
+    client = make_client()
+    seed_two_days(client)
+
+    resp = client.get("/records/export")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert 'filename="records.csv"' in resp.headers["content-disposition"]
+    assert resp.headers["x-total-records"] == "5"
+
+    raw = resp.content
+    assert raw.startswith(b"\xef\xbb\xbf"), "首字节应为 UTF-8 BOM，Excel 才能识别编码"
+
+    text = raw.decode("utf-8-sig")
+    lines = text.strip().split("\r\n")
+    assert lines[0] == "id,amount,type,category,date", "表头列顺序固定"
+    assert len(lines) == 6, "5 条流水 + 1 行表头"
+    assert lines[1] == "1,5000.0,income,工资,2026-11-01"
+
+
+def test_export_csv_respects_filters():
+    """导出与 /records 共用筛选条件：只导支出时行数随之减少。"""
+    client = make_client()
+    seed_two_days(client)
+
+    resp = client.get("/records/export", params={"type": "expense"})
+    assert resp.headers["x-total-records"] == "3"
+    lines = resp.content.decode("utf-8-sig").strip().split("\r\n")
+    assert len(lines) == 4
+    assert all("expense" in line for line in lines[1:])
+
+    ranged = client.get("/records/export", params={
+        "start_date": "2026-11-02", "end_date": "2026-11-02"
+    })
+    assert ranged.headers["x-total-records"] == "2"
+
+
+def test_export_csv_empty_result_has_header_only():
+    """没有匹配流水时仍返回仅含表头的 CSV，便于前端固定解析。"""
+    client = make_client()
+    resp = client.get("/records/export", params={"category": "不存在"})
+    assert resp.status_code == 200
+    assert resp.headers["x-total-records"] == "0"
+    lines = resp.content.decode("utf-8-sig").strip().split("\r\n")
+    assert len(lines) == 1
+
+
+def test_export_csv_invalid_params_rejected():
+    """非法 type 与起止颠倒两种情况均返回 422，不导出错误数据。"""
+    client = make_client()
+    seed_two_days(client)
+
+    bad_type = client.get("/records/export", params={"type": "loan"})
+    assert bad_type.status_code == 422
+
+    reversed_range = client.get("/records/export", params={
+        "start_date": "2026-11-05", "end_date": "2026-11-01"
+    })
+    assert reversed_range.status_code == 422
+
