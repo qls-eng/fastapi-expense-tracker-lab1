@@ -28,11 +28,16 @@ fastapi-expense-tracker-lab1/
 │   └── test_api.py        # pytest 测试用例（正常 + 边界 + 异常）
 ├── docs/
 │   ├── 需求澄清_考题二.md
+│   ├── 实验报告.md
 │   ├── ai对话记录.md
 │   ├── 复盘.md
 │   └── images/
-│       ├── pytest_output.txt      # pytest 运行结果记录
-│       └── live_api_check.txt     # 真实启动后接口调用记录
+│       ├── api_docs_swagger.png        # Swagger 接口文档截图
+│       ├── api_summary_response.png    # 区间汇总真实响应截图
+│       ├── api_records_response.png    # 支出明细筛选响应截图
+│       ├── api_validation_error.png    # 非法类型 422 响应截图
+│       ├── pytest_output.txt           # pytest 运行结果记录
+│       └── live_api_check.txt          # 真实启动后接口调用记录
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -123,5 +128,6 @@ GET /summary?start_date=2026-11-01&end_date=2026-11-02
 ## 设计说明与过程文档
 
 - [需求澄清](docs/需求澄清_考题二.md)
+- [实验报告](docs/实验报告.md)
 - [AI 协作对话记录](docs/ai对话记录.md)
 - [复盘](docs/复盘.md)
