@@ -38,7 +38,9 @@ fastapi-expense-tracker-lab1/
 │   ├── ai对话记录.md
 │   ├── 复盘.md
 │   └── images/
-│       ├── api_docs_swagger.png        # Swagger 接口文档截图
+│       ├── api_docs_swagger.png        # Swagger 接口文档总览（6 个接口）
+│       ├── api_docs_swagger_by_category.png  # 按分类汇总接口展开文档
+│       ├── api_docs_swagger_export.png # 导出 CSV 接口展开文档（200 声明为 text/csv）
 │       ├── api_summary_response.png    # 区间汇总真实响应截图
 │       ├── api_records_response.png    # 支出明细筛选响应截图
 │       ├── api_validation_error.png    # 非法类型 422 响应截图

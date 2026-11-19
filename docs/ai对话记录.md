@@ -105,3 +105,28 @@ export?type=expense: X-Total-Records=3
 
 **本轮判定：**
 两接口完成且与手算一致；占比口径（同类型总额）已在报告与 README 写明，避免"四条加起来 100.01"这类误读。
+
+## 考题二 第6轮（R6）：补 Swagger 截图时发现文档声明与实际响应不符
+
+**背景说明：**
+第 5 轮完成后，接口文档截图还只覆盖 records / summary / validation 三类，新增的两个接口没有文档图。本轮补图时发现一处真实问题，一并修掉。
+
+**我的提问：**
+```
+把 /summary/by-category 和 /records/export 的 Swagger 展开截图补上。
+要求：真实打开本机 /docs 截图，不要手工拼图。
+```
+
+**AI 输出摘要：**
+用无头 Edge（DevTools 协议）打开 `http://127.0.0.1:8000/docs`，等 `.opblock` 渲染完成后按深链接逐个展开目标接口，再按元素实际尺寸裁切截图；产出总览图与两张展开图。
+
+**人工审查发现：**
+1. **媒体类型声明错误**：导出的截图里 `/records/export` 的 200 响应被展示成 `application/json`、示例只有 `"string"`，而接口实际返回 `text/csv`。原因是路由只写了 `media_type="text/csv; charset=utf-8"`，OpenAPI 仍按默认 json 生成。修法：在路由上加 `response_class=Response` + `responses={200: {"content": {"text/csv": {"schema": ..., "example": "id,amount,type,category,date\r\n1,5000.0,income,工资,2026-11-01"}}}}`。改完 `/openapi.json` 里 200 的媒体类型确认为 `text/csv`。
+2. **首次截图失败**：先连的是浏览器级调试 target，`Page.enable` 报 `'Page.enable' wasn't found`；改为从 `/json/list` 取页面级 target 后正常。
+3. **展开失败**：点"Expand all"后条目高度仍是 44px（未展开），改用 Swagger 的深链接（`#/default/<operationId>`）驱动展开，并断言 `is-open` 且高度 > 150px 后再截图。
+
+**运行结果：**
+`pytest tests/ -q` → **22 passed, 1 warning in 3.85s**（改动只影响文档声明，未动业务逻辑）；三张 Swagger 图重新产出并已读图复核，导出的 200 明确显示 `text/csv` 与 CSV 示例。
+
+**本轮判定：**
+截图是真实渲染结果，未做任何拼接或改字；发现的文档声明问题已修正并回归测试，没有把"截图看着不对"当作可接受状态。

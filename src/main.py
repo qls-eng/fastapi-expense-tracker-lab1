@@ -143,7 +143,22 @@ def create_app(store: Optional[RecordStore] = None) -> FastAPI:
             "items": rendered,
         }
 
-    @app.get("/records/export")
+    @app.get(
+        "/records/export",
+        response_class=Response,
+        responses={
+            200: {
+                "description": "CSV 文件（utf-8-sig 编码，可直接用 Excel 打开）",
+                "content": {
+                    "text/csv": {
+                        "schema": {"type": "string", "format": "binary"},
+                        "example": "id,amount,type,category,date\r\n1,5000.0,income,工资,2026-11-01",
+                    }
+                },
+            },
+            422: {"description": "参数校验失败（非法 type、起止日期颠倒等）"},
+        },
+    )
     def export_records(
         record_type: Optional[str] = Query(None, alias="type", description="income / expense"),
         category: Optional[str] = Query(None, description="分类精确匹配"),
